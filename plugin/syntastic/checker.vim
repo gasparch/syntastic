@@ -51,6 +51,10 @@ function! g:SyntasticChecker.New(args, ...) abort " {{{2
         let newObj._highlightRegexFunc = function(prefix . 'GetHighlightRegex')
     endif
 
+    if has_key(a:args, 'support_on_fly_check') && g:syntastic_check_on_esc
+        let newObj._enable_on_fly_check = 1
+        let newObj._uncommited_temp_path = ''
+    endif
     return newObj
 endfunction " }}}2
 
@@ -113,6 +117,10 @@ function! g:SyntasticChecker.getLocListRaw() abort " {{{2
         endif
     endif
 
+    if has_key(self, '_enable_on_fly_check')
+        call self.writeUncommitedFile()
+    endif
+
     try
         let list = self._locListFunc()
         if self._exec !=# ''
@@ -131,6 +139,10 @@ function! g:SyntasticChecker.getLocListRaw() abort " {{{2
     call self._quietMessages(list)
     call syntastic#log#debug(g:_SYNTASTIC_DEBUG_TRACE,
         \ 'getLocList: checker ' . name . ' run in ' . split(reltimestr(reltime(checker_start)))[0] . 's')
+
+    if has_key(self, '_enable_on_fly_check')
+        call self.cleanupTempFile()
+    endif
     return list
 endfunction " }}}2
 
@@ -172,13 +184,55 @@ function! g:SyntasticChecker.log(msg, ...) abort " {{{2
     endif
 endfunction " }}}2
 
+function! g:SyntasticChecker.getTempFileName() " {{{2
+    return self._uncommited_temp_path
+endfunction " }}}2
+
+function! g:SyntasticChecker.writeUncommitedFile() " {{{2
+"    call syntastic#log#debug(g:_SYNTASTIC_DEBUG_TRACE, 'modif', &modified, 'writing')
+    if &modified
+        " mimic extension of original file, as some scripts
+        " depend on valid extension
+        let extension = syntastic#util#shexpand("%:e")
+        let self._uncommited_temp_path = tempname() . '.' . extension
+        " remove silent! while debugging
+        silent! exec "keepalt w " . self._uncommited_temp_path
+
+        "call confirm('just' . self._uncommited_temp_path)
+    else
+        let self._uncommited_temp_path = ''
+    endif
+endfunction " }}}2
+
+function! g:SyntasticChecker.cleanupTempFile() " {{{2
+    if !empty(self._uncommited_temp_path)
+        call delete(self._uncommited_temp_path)
+        let self._uncommited_temp_path = ''
+    endif
+endfunction " }}}2
+
+function! g:SyntasticChecker.getFileName(fileNameOptions) " {{{2
+    if !has_key(self, "_uncommited_temp_path") || empty(self._uncommited_temp_path)
+        return syntastic#util#shexpand(a:fileNameOptions == '' ? '%' : a:fileNameOptions)
+    else
+        " use temp file, if original buffer is not written to disk yet
+        return self._uncommited_temp_path
+    endif
+endfunction " }}}2
+
 function! g:SyntasticChecker.makeprgBuild(opts) abort " {{{2
     let basename = self._filetype . '_' . self._name . '_'
 
+    let fname_options = ''
+    if (has_key(a:opts, "fname_options"))
+        let fname_options = a:opts["fname_options"]
+    endif
+
+    let fname = self.getFileName(fname_options)
     let parts = []
     call extend(parts, self._getOpt(a:opts, basename, 'exe', self.getExecEscaped()))
     call extend(parts, self._getOpt(a:opts, basename, 'args', ''))
-    call extend(parts, self._getOpt(a:opts, basename, 'fname', syntastic#util#shexpand('%')))
+    call extend(parts, self._getOpt(a:opts, basename, 'fname', fname))
     call extend(parts, self._getOpt(a:opts, basename, 'post_args', ''))
     call extend(parts, self._getOpt(a:opts, basename, 'tail', ''))
 

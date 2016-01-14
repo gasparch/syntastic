@@ -47,12 +47,14 @@ function! SyntaxCheckers_javascript_jshint_GetLocList() dict
         \ 'makeprg': makeprg,
         \ 'errorformat': errorformat,
         \ 'defaults': {'bufnr': bufnr('')},
-        \ 'returns': [0, 2] })
+        \ 'returns': [0, 2],
+        \ 'temp_path': self.getTempFileName()})
 endfunction
 
 call g:SyntasticRegistry.CreateAndRegisterChecker({
     \ 'filetype': 'javascript',
-    \ 'name': 'jshint'})
+    \ 'name': 'jshint',
+    \ 'support_on_fly_check': 1})
 
 let &cpo = s:save_cpo
 unlet s:save_cpo

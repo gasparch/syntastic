@@ -100,7 +100,8 @@ endfunction " }}}2
 call g:SyntasticRegistry.CreateAndRegisterChecker({
     \ 'filetype': 'vim',
     \ 'name': 'vimlint',
-    \ 'exec': '' })
+    \ 'exec': '',
+    \ 'support_on_fly_check': 1})
 
 let &cpo = s:save_cpo
 unlet s:save_cpo

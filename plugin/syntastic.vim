@@ -78,6 +78,7 @@ let g:_SYNTASTIC_DEFAULTS = {
         \ 'auto_loc_list':            2,
         \ 'check_on_open':            0,
         \ 'check_on_wq':              1,
+        \ 'check_on_esc':             1,
         \ 'cursor_columns':           1,
         \ 'debug':                    0,
         \ 'echo_current_error':       1,
@@ -250,11 +251,17 @@ if g:syntastic_nested_autocommands
     augroup syntastic
         autocmd BufReadPost  * nested call s:BufReadPostHook()
         autocmd BufWritePost * nested call s:BufWritePostHook()
+        autocmd CursorHold,CursorHoldI * nested call s:onCursorHold()
+        autocmd CursorMoved,CursorMovedI * nested call s:onBufferInvalidated('CursorMoved')
+        autocmd InsertLeave * nested call s:onBufferInvalidated('InsertLeave')
     augroup END
 else
     augroup syntastic
         autocmd BufReadPost  * call s:BufReadPostHook()
         autocmd BufWritePost * call s:BufWritePostHook()
+        autocmd CursorHold,CursorHoldI * call s:onCursorHold()
+        autocmd CursorMoved,CursorMovedI * call s:onBufferInvalidated('CursorMoved')
+        autocmd InsertLeave * call s:onBufferInvalidated('InsertLeave')
     augroup END
 endif
 
@@ -265,10 +272,34 @@ if exists('##QuitPre')
     augroup END
 endif
 
+" make a delay after loading buffer before checking it for syntax errors
+" thus allowing fast buffer switching
 function! s:BufReadPostHook() abort " {{{2
     if g:syntastic_check_on_open
+        " notify CursorHold handler that we have outstanding request to update
+        " information
         call syntastic#log#debug(g:_SYNTASTIC_DEBUG_AUTOCOMMANDS,
             \ 'autocmd: BufReadPost, buffer ' . bufnr('') . ' = ' . string(bufname(str2nr(bufnr('')))))
+        let b:syntastic_delayed_update = 1
+    endif
+endfunction " }}}2
+
+function! s:onBufferInvalidated(mode) abort " {{{2
+    if g:syntastic_check_on_esc
+        " notify CursorHold handler that we have outstanding request to update
+        " information
+        call syntastic#log#debug(g:_SYNTASTIC_DEBUG_AUTOCOMMANDS,
+            \ 'autocmd: '. a:mode .', buffer ' . bufnr('') . ' = ' . string(bufname(str2nr(bufnr('')))))
+        let b:syntastic_delayed_update = 1
+    endif
+endfunction " }}}2
+
+" called after :set updatetime (4s by default) of user inactivity
+function! s:onCursorHold () abort " {{{2
+    if b:syntastic_delayed_update
+        call syntastic#log#debug(g:_SYNTASTIC_DEBUG_AUTOCOMMANDS,
+            \ 'autocmd: OnCursorHold, buffer ' . bufnr('') . ' = ' . string(bufname(str2nr(bufnr('')))))
+        let b:syntastic_delayed_update = 0
         call s:UpdateErrors(1, [])
     endif
 endfunction " }}}2
@@ -549,6 +580,30 @@ function! SyntasticMake(options) abort " {{{2
         \ index(a:options['returns'], v:shell_error) == -1
 
     if !bailout
+        " fix temp path in tht output of the checker to current file name,
+        " otherwise vim will not match errors and current window
+        if has_key(a:options, "temp_path") && !empty(a:options["temp_path"])
+            let this_buffer_path = syntastic#util#shexpand('%')
+            let regexp = escape(a:options['temp_path'], "/")
+            let err_lines_len = len(err_lines)
+
+"           DEBUG
+"            for line in err_lines
+"                call syntastic#log#debug(g:_SYNTASTIC_DEBUG_TRACE, 'YYYY:', line)
+"            endfor
+
+            let i=0
+            while (i < err_lines_len)
+                let err_lines[i] = substitute(err_lines[i], regexp, this_buffer_path, '')
+                let i += 1
+            endwhile
+
+"           DEBUG
+"            for line in err_lines
+"                call syntastic#log#debug(g:_SYNTASTIC_DEBUG_TRACE, 'ZZZZ:', line)
+"            endfor
+        endif
+
         if has_key(a:options, 'Preprocess')
             let err_lines = call(a:options['Preprocess'], [err_lines])
             call syntastic#log#debug(g:_SYNTASTIC_DEBUG_LOCLIST, 'preprocess (external):', err_lines)

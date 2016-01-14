@@ -39,7 +39,7 @@ function! SyntaxCheckers_erlang_escript_GetLocList() dict
     endif
     let makeprg = self.makeprgBuild({
         \ 'args_after': args,
-        \ 'fname': syntastic#util#shexpand('%:p'),
+        \ 'fname_options': '%:p',
         \ 'post_args_after': post_args })
 
     let errorformat =
@@ -48,12 +48,14 @@ function! SyntaxCheckers_erlang_escript_GetLocList() dict
 
     return SyntasticMake({
         \ 'makeprg': makeprg,
-        \ 'errorformat': errorformat })
+        \ 'errorformat': errorformat,
+        \ 'temp_path': self.getTempFileName()})
 endfunction
 
 call g:SyntasticRegistry.CreateAndRegisterChecker({
     \ 'filetype': 'erlang',
-    \ 'name': 'escript'})
+    \ 'name': 'escript',
+    \ 'support_on_fly_check': 1})
 
 let &cpo = s:save_cpo
 unlet s:save_cpo
