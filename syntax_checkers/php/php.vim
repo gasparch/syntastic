@@ -39,12 +39,14 @@ function! SyntaxCheckers_php_php_GetLocList() dict
     return SyntasticMake({
         \ 'makeprg': makeprg,
         \ 'errorformat': errorformat,
-        \ 'postprocess': ['guards'] })
+        \ 'postprocess': ['guards'],
+        \ 'temp_path': self.getTempFileName()})
 endfunction
 
 call g:SyntasticRegistry.CreateAndRegisterChecker({
     \ 'filetype': 'php',
-    \ 'name': 'php'})
+    \ 'name': 'php',
+    \ 'support_on_fly_check': 1})
 
 let &cpo = s:save_cpo
 unlet s:save_cpo
